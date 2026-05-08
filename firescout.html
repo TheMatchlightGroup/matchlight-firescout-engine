@@ -138,6 +138,10 @@
   .notes-card .help { color: var(--ml-purple); font-style: italic; }
   .notes-card textarea { min-height: 240px; }
 
+  .vibes-card { border-left: 3px solid var(--ml-red); background: #fffaf7; }
+  .vibes-card .help { color: var(--ml-red); font-style: italic; }
+  .vibes-card textarea { min-height: 120px; }
+
   .scale-card { border-left: 3px solid var(--ml-purple); }
 
   /* Toggle pill groups for scale signals */
@@ -311,6 +315,25 @@
 - Riley is the shop dog and the customers' favorite employee.
 - They treat everyone like family. The shop has a real warmth you can feel walking in.
 - Veteran Affairs is a major part of who they serve.
+"></textarea>
+      </div>
+    </div>
+
+    <div class="card vibes-card">
+      <h2>Vibes &amp; directional impulses</h2>
+      <p class="help">
+        Internal language only. This is where you put the metaphors, references,
+        and creative instincts that should <i>shape</i> how Claude writes — but
+        should never appear word-for-word in the final audit. Think of it as
+        whispering direction into Claude's ear.
+      </p>
+      <div class="field">
+        <textarea name="vibes" placeholder="Examples (your shorthand, not theirs):
+- 'Competent doctor meets wholistic hippie' (don't say this to her face!)
+- Mister Rogers energy, but with a clipboard
+- The Patagonia of accountants — earned, not performative
+- Punk rock grandma vibes
+- Should feel more like a calling than a service
 "></textarea>
       </div>
     </div>
