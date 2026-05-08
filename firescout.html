@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FireScout Intake — The Matchlight Group</title>
+<style>
+  :root {
+    --ml-purple: #3D1E5C;
+    --ml-purple-lt: #EDE6F4;
+    --ml-orange: #F26B3A;
+    --ml-red: #C42434;
+    --ml-ink: #1C1626;
+    --ml-gray: #6E6577;
+    --ml-rule: #D9D2E0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #faf8fc;
+    color: var(--ml-ink);
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  header .kicker {
+    color: var(--ml-orange);
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  header h1 {
+    color: var(--ml-purple);
+    font-size: 32px;
+    margin: 0 0 6px;
+    line-height: 1.15;
+  }
+  header p {
+    color: var(--ml-gray);
+    margin: 0;
+    font-size: 14px;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(60,30,92,0.06), 0 8px 24px rgba(60,30,92,0.04);
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    color: var(--ml-purple);
+    font-size: 16px;
+    margin: 0 0 4px;
+    font-weight: 700;
+  }
+  .card .help {
+    color: var(--ml-gray);
+    font-size: 13px;
+    margin: 0 0 20px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ml-purple);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  label .req { color: var(--ml-orange); }
+  input[type=text], input[type=url], select, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--ml-rule);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--ml-ink);
+    background: white;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--ml-purple);
+    box-shadow: 0 0 0 3px rgba(60,30,92,0.08);
+  }
+  textarea {
+    min-height: 180px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+  .field { margin-bottom: 16px; }
+  .field:last-child { margin-bottom: 0; }
+  .notes-card { border-left: 3px solid var(--ml-orange); }
+  .notes-card .help { color: var(--ml-purple); font-style: italic; }
+  .notes-card textarea { min-height: 240px; }
+  .submit-row {
+    text-align: center;
+    margin-top: 28px;
+  }
+  button {
+    background: var(--ml-purple);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 16px 36px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+    box-shadow: 0 4px 12px rgba(60,30,92,0.18);
+  }
+  button:hover { background: #4d2872; }
+  button:active { transform: translateY(1px); }
+  button[disabled] {
+    background: var(--ml-gray);
+    cursor: wait;
+    box-shadow: none;
+  }
+  .status {
+    margin-top: 18px;
+    padding: 14px 18px;
+    border-radius: 8px;
+    background: var(--ml-purple-lt);
+    color: var(--ml-purple);
+    font-size: 14px;
+    text-align: center;
+    display: none;
+  }
+  .status.error {
+    background: #fbe5e7;
+    color: var(--ml-red);
+  }
+  footer {
+    text-align: center;
+    margin-top: 40px;
+    color: var(--ml-gray);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">FireScout Engine</div>
+    <h1>New Audit Intake</h1>
+    <p>Fill this out from your meeting notes. Claude does the rest.</p>
+  </header>
+
+  <form id="firescout-form" method="post" action="/firescout/generate">
+
+    <div class="card">
+      <h2>About the client</h2>
+      <p class="help">The basics. Most of these you'll grab from their site.</p>
+      <div class="grid">
+        <div class="field">
+          <label>Business name <span class="req">*</span></label>
+          <input type="text" name="client_name" required placeholder="Independent Lifestyles">
+        </div>
+        <div class="field">
+          <label>Contact name(s) <span class="req">*</span></label>
+          <input type="text" name="contact_names" required placeholder="Dave and Carrie">
+        </div>
+        <div class="field">
+          <label>Location <span class="req">*</span></label>
+          <input type="text" name="location" required placeholder="Madison Heights, VA">
+        </div>
+        <div class="field">
+          <label>Founded year</label>
+          <input type="text" name="founded_year" placeholder="2002">
+        </div>
+        <div class="field">
+          <label>Industry</label>
+          <input type="text" name="industry" placeholder="Mobility specialist / accessibility equipment">
+        </div>
+        <div class="field">
+          <label>Salesperson</label>
+          <input type="text" name="salesperson" placeholder="Your name">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Their storefronts</h2>
+      <p class="help">Claude will look at whatever you give it. The more URLs, the better the audit.</p>
+      <div class="field">
+        <label>Website URL</label>
+        <input type="url" name="website_url" placeholder="https://www.example.com">
+      </div>
+      <div class="grid">
+        <div class="field">
+          <label>Facebook</label>
+          <input type="url" name="facebook_url" placeholder="https://facebook.com/...">
+        </div>
+        <div class="field">
+          <label>Instagram</label>
+          <input type="url" name="instagram_url" placeholder="https://instagram.com/...">
+        </div>
+        <div class="field">
+          <label>LinkedIn</label>
+          <input type="url" name="linkedin_url" placeholder="https://linkedin.com/company/...">
+        </div>
+        <div class="field">
+          <label>Other (TikTok, YouTube, X)</label>
+          <input type="text" name="other_social" placeholder="Optional">
+        </div>
+      </div>
+    </div>
+
+    <div class="card notes-card">
+      <h2>The gold — your human notes</h2>
+      <p class="help">
+        This is the part Claude can't get from a website. Owner stories, lived
+        experience, the dog at the desk, family traditions, anything you noticed
+        in the meeting that made you feel something. Specificity here is what
+        separates a Matchlight audit from a generic one.
+      </p>
+      <div class="field">
+        <textarea name="sales_notes" required placeholder="Examples:
+- Carrie has been doing this for 23 years; her daughter works there.
+- Ashley uses a wheelchair herself and serves their clients with that lived perspective.
+- Riley is the shop dog and the customers' favorite employee.
+- They treat everyone like family. The shop has a real warmth you can feel walking in.
+- Veteran Affairs is a major part of who they serve.
+"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Recommendation hint</h2>
+      <p class="help">What feels like the right Matchlight fit? Claude will validate against the audit findings, but use this as the starting point.</p>
+      <div class="field">
+        <label>Recommended bundle</label>
+        <select name="recommendation_hint">
+          <option>Ignite Storefront Cleanup</option>
+          <option>Spark Storefront Cleanup</option>
+          <option>Single Storefront Refresh — Logo only</option>
+          <option>Single Storefront Refresh — Website only</option>
+          <option>Single Storefront Refresh — Social only</option>
+          <option>Ongoing Retainer</option>
+          <option>Let Claude decide</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="submit-row">
+      <button type="submit" id="submit-btn">Generate FireScout Audit</button>
+      <div class="status" id="status"></div>
+    </div>
+  </form>
+
+  <footer>
+    The Matchlight Group · FireScout Engine v1 · Internal Use
+  </footer>
+</div>
+
+<script>
+  const form = document.getElementById('firescout-form');
+  const btn  = document.getElementById('submit-btn');
+  const status = document.getElementById('status');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    btn.textContent = 'Generating audit (60-90s)...';
+    status.style.display = 'block';
+    status.className = 'status';
+    status.textContent = 'Claude is scoring, writing, and rendering. Hang tight.';
+
+    try {
+      const fd = new FormData(form);
+      const res = await fetch('/firescout/generate', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const clientName = fd.get('client_name') || 'Audit';
+      a.href = url;
+      a.download = `${clientName.replace(/[^a-z0-9]/gi,'_')}_FireScout_Audit.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      status.textContent = 'Audit downloaded. Beautiful work.';
+      btn.textContent = 'Generate another';
+      btn.disabled = false;
+    } catch (err) {
+      status.className = 'status error';
+      status.textContent = 'Something went wrong: ' + err.message;
+      btn.textContent = 'Try again';
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
