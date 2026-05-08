@@ -23,16 +23,41 @@
     padding: 0;
     line-height: 1.5;
   }
+
+  /* Branded top bar */
+  .topbar {
+    background: var(--ml-purple);
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+  }
+  .topbar img {
+    height: 40px;
+    width: auto;
+    display: block;
+  }
+  .topbar-text {
+    color: white;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: 0.01em;
+  }
+  .topbar-text .accent {
+    color: var(--ml-orange);
+  }
+
   .wrap {
     max-width: 760px;
     margin: 0 auto;
     padding: 40px 24px 80px;
   }
-  header {
+  header.intro {
     text-align: center;
     margin-bottom: 32px;
   }
-  header .kicker {
+  header.intro .kicker {
     color: var(--ml-orange);
     font-weight: 700;
     font-size: 11px;
@@ -40,17 +65,18 @@
     text-transform: uppercase;
     margin-bottom: 6px;
   }
-  header h1 {
+  header.intro h1 {
     color: var(--ml-purple);
     font-size: 32px;
     margin: 0 0 6px;
     line-height: 1.15;
   }
-  header p {
+  header.intro p {
     color: var(--ml-gray);
     margin: 0;
     font-size: 14px;
   }
+
   .card {
     background: white;
     border-radius: 12px;
@@ -111,6 +137,45 @@
   .notes-card { border-left: 3px solid var(--ml-orange); }
   .notes-card .help { color: var(--ml-purple); font-style: italic; }
   .notes-card textarea { min-height: 240px; }
+
+  .scale-card { border-left: 3px solid var(--ml-purple); }
+
+  /* Toggle pill groups for scale signals */
+  .pill-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .pill-group input[type=radio] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .pill-group label.pill {
+    display: inline-block;
+    padding: 9px 16px;
+    border: 1px solid var(--ml-rule);
+    border-radius: 999px;
+    background: white;
+    color: var(--ml-ink);
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin: 0;
+  }
+  .pill-group label.pill:hover {
+    border-color: var(--ml-purple);
+  }
+  .pill-group input[type=radio]:checked + label.pill {
+    background: var(--ml-purple);
+    color: white;
+    border-color: var(--ml-purple);
+  }
+
   .submit-row {
     text-align: center;
     margin-top: 28px;
@@ -158,10 +223,16 @@
 </style>
 </head>
 <body>
+
+<div class="topbar">
+  <img src="/firescout/static/logo.png" alt="The Matchlight Group">
+  <div class="topbar-text">FireScout <span class="accent">·</span> The Matchlight Group</div>
+</div>
+
 <div class="wrap">
-  <header>
-    <div class="kicker">FireScout Engine</div>
-    <h1>New Audit Intake</h1>
+  <header class="intro">
+    <div class="kicker">Engine Intake</div>
+    <h1>New Audit</h1>
     <p>Fill this out from your meeting notes. Claude does the rest.</p>
   </header>
 
@@ -229,9 +300,9 @@
       <h2>The gold — your human notes</h2>
       <p class="help">
         This is the part Claude can't get from a website. Owner stories, lived
-        experience, the dog at the desk, family traditions, anything you noticed
-        in the meeting that made you feel something. Specificity here is what
-        separates a Matchlight audit from a generic one.
+        experience, the dog at the desk, family traditions, anything you
+        noticed in the meeting that made you feel something. Specificity here
+        is what separates a Matchlight audit from a generic one.
       </p>
       <div class="field">
         <textarea name="sales_notes" required placeholder="Examples:
@@ -244,20 +315,73 @@
       </div>
     </div>
 
-    <div class="card">
-      <h2>Recommendation hint</h2>
-      <p class="help">What feels like the right Matchlight fit? Claude will validate against the audit findings, but use this as the starting point.</p>
+    <div class="card scale-card">
+      <h2>Scale signals — help Claude pick the right tier</h2>
+      <p class="help">
+        Answer based on what this client actually needs. Claude uses these
+        signals to map them to the right Matchlight service tier (Ignite vs
+        Blaze, Website vs SCRLsite, single service vs Storefront Cleanup).
+        If you're not sure, pick the closest fit.
+      </p>
+
       <div class="field">
-        <label>Recommended bundle</label>
-        <select name="recommendation_hint">
-          <option>Ignite Storefront Cleanup</option>
-          <option>Spark Storefront Cleanup</option>
-          <option>Single Storefront Refresh — Logo only</option>
-          <option>Single Storefront Refresh — Website only</option>
-          <option>Single Storefront Refresh — Social only</option>
-          <option>Ongoing Retainer</option>
-          <option>Let Claude decide</option>
-        </select>
+        <label>How many storefronts need real attention?</label>
+        <div class="pill-group">
+          <input type="radio" id="sf1" name="storefronts_needing_work" value="one" required>
+          <label for="sf1" class="pill">Just one (logo, OR site, OR social)</label>
+          <input type="radio" id="sf2" name="storefronts_needing_work" value="two-three" checked>
+          <label for="sf2" class="pill">Two or three</label>
+          <input type="radio" id="sf3" name="storefronts_needing_work" value="all">
+          <label for="sf3" class="pill">All of them</label>
+          <input type="radio" id="sf4" name="storefronts_needing_work" value="single-task">
+          <label for="sf4" class="pill">Just a small specific task</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Roughly how big does their site need to be?</label>
+        <div class="pill-group">
+          <input type="radio" id="sz1" name="site_scale" value="single-page" required>
+          <label for="sz1" class="pill">Single page (lead-capture / SCRLsite-style)</label>
+          <input type="radio" id="sz2" name="site_scale" value="small-multi" checked>
+          <label for="sz2" class="pill">5 pages or fewer</label>
+          <input type="radio" id="sz3" name="site_scale" value="large-multi">
+          <label for="sz3" class="pill">6-10 pages</label>
+          <input type="radio" id="sz4" name="site_scale" value="not-applicable">
+          <label for="sz4" class="pill">N/A — site isn't the focus</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Does the client need e-commerce?</label>
+        <div class="pill-group">
+          <input type="radio" id="ec1" name="ecommerce_needed" value="no" checked required>
+          <label for="ec1" class="pill">No</label>
+          <input type="radio" id="ec2" name="ecommerce_needed" value="yes">
+          <label for="ec2" class="pill">Yes</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Will they need ongoing social content management?</label>
+        <div class="pill-group">
+          <input type="radio" id="oc1" name="ongoing_content" value="no" checked required>
+          <label for="oc1" class="pill">No, one-time alignment is enough</label>
+          <input type="radio" id="oc2" name="ongoing_content" value="light">
+          <label for="oc2" class="pill">Light — a 90-day kickoff</label>
+          <input type="radio" id="oc3" name="ongoing_content" value="ongoing">
+          <label for="oc3" class="pill">Yes — they need a partner long-term</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Video / multimedia content needs?</label>
+        <div class="pill-group">
+          <input type="radio" id="vd1" name="video_needs" value="no" checked required>
+          <label for="vd1" class="pill">Not really</label>
+          <input type="radio" id="vd2" name="video_needs" value="yes">
+          <label for="vd2" class="pill">Yes — Reels, video editing, etc.</label>
+        </div>
       </div>
     </div>
 
@@ -268,7 +392,7 @@
   </form>
 
   <footer>
-    The Matchlight Group · FireScout Engine v1 · Internal Use
+    The Matchlight Group · FireScout Engine v2 · Internal Use
   </footer>
 </div>
 
@@ -287,11 +411,17 @@
 
     try {
       const fd = new FormData(form);
+
+      // Get the response: it includes both PDF download AND a JSON header for the internal note
       const res = await fetch('/firescout/generate', { method: 'POST', body: fd });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
+
+      // Pull the internal sales note from a custom response header (server sets it)
+      const internalNote = res.headers.get('X-Internal-Sales-Note') || '';
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -300,7 +430,15 @@
       a.download = `${clientName.replace(/[^a-z0-9]/gi,'_')}_FireScout_Audit.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-      status.textContent = 'Audit downloaded. Beautiful work.';
+
+      let msg = 'Audit downloaded. Beautiful work.';
+      if (internalNote && internalNote.trim() && internalNote.trim() !== '-') {
+        msg += '\n\n📌 Internal note for sales: ' + decodeURIComponent(internalNote);
+      }
+      status.textContent = msg;
+      status.style.whiteSpace = 'pre-wrap';
+      status.style.textAlign = 'left';
+
       btn.textContent = 'Generate another';
       btn.disabled = false;
     } catch (err) {
