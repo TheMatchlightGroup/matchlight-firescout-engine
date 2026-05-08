@@ -31,7 +31,7 @@ from reportlab.graphics import renderPDF
 
 # Optional: PDF flattening (for email-safe output)
 try:
-    from pdf2image import convert_from_path
+    import pypdfium2 as pdfium
     from PIL import Image
     FLATTEN_AVAILABLE = True
 except ImportError:
@@ -601,15 +601,19 @@ def render_audit(audit_data, output_path, flatten=True):
         raise RuntimeError("Flattening requested but pdf2image/Pillow not installed.")
 
     # Rasterize at 200 DPI for email-safe output
-    pages = convert_from_path(vector_path, dpi=200)
+    pdf = pdfium.PdfDocument(vector_path)
     flat_pages = []
-    for p in pages:
-        if p.mode != "RGB":
-            bg = Image.new("RGB", p.size, "white")
-            bg.paste(p, mask=p.split()[3] if p.mode == "RGBA" else None)
+    for page in pdf:
+        # 200 DPI = scale factor of 200/72 ≈ 2.78
+        bitmap = page.render(scale=200/72)
+        pil_img = bitmap.to_pil()
+        if pil_img.mode != "RGB":
+            bg = Image.new("RGB", pil_img.size, "white")
+            bg.paste(pil_img, mask=pil_img.split()[3] if pil_img.mode == "RGBA" else None)
             flat_pages.append(bg)
         else:
-            flat_pages.append(p)
+            flat_pages.append(pil_img)
+    pdf.close()
     flat_pages[0].save(output_path, save_all=True,
                        append_images=flat_pages[1:], resolution=200.0)
 
