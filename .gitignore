@@ -216,3 +216,22 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# === FireScout-specific additions ===
+
+# Secrets — NEVER commit these
+.env
+.env.local
+*.key
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Generated audits — don't commit client PDFs to git history
+*.pdf
+/tmp/
+
+# IDE
+.vscode/
+.idea/
