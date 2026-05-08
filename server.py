@@ -100,6 +100,7 @@ def generate(
     other_social: str          = Form(""),
     industry: str              = Form(""),
     sales_notes: str           = Form(...),
+    vibes: str                 = Form(""),
     salesperson: str           = Form(""),
     # Scale signals (NEW):
     storefronts_needing_work: str = Form("two-three"),
@@ -128,6 +129,14 @@ def generate(
 
 ## Sales team's human notes (THE GOLD)
 {sales_notes}
+
+## Vibes & directional impulses (ABSORB ONLY — DO NOT QUOTE)
+{vibes if vibes.strip() else "(none provided — write from the sales notes alone)"}
+
+These are the salesperson's internal shorthand for the brand's energy, tone,
+and creative direction. Let these shape your voice and word choices, but
+NEVER reproduce phrases from this field verbatim in the audit. The client
+should never see this language back. It is direction, not copy.
 
 ## Scale signals from sales (use these to pick the right tier)
 
