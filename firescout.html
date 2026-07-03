@@ -218,6 +218,87 @@
     background: #fbe5e7;
     color: var(--ml-red);
   }
+  .result {
+    display: none;
+    margin-top: 22px;
+    border: 1px solid var(--ml-rule);
+    border-top: 4px solid var(--ml-orange);
+    border-radius: 10px;
+    background: white;
+    padding: 24px;
+    text-align: center;
+  }
+  .result h3 {
+    color: var(--ml-purple);
+    font-size: 18px;
+    margin: 0 0 4px;
+  }
+  .result .client-line {
+    color: var(--ml-gray);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .result img.qr {
+    width: 190px;
+    height: 190px;
+    border: 1px solid var(--ml-rule);
+    border-radius: 8px;
+    margin-bottom: 14px;
+  }
+  .link-row {
+    display: flex;
+    gap: 8px;
+    max-width: 440px;
+    margin: 0 auto 14px;
+  }
+  .link-row input {
+    flex: 1;
+    font-size: 13px;
+    padding: 10px 12px;
+    border: 1px solid var(--ml-rule);
+    border-radius: 8px;
+    color: var(--ml-ink);
+  }
+  .link-row button {
+    padding: 10px 16px;
+    font-size: 13px;
+    box-shadow: none;
+  }
+  .result-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .result-actions a {
+    display: inline-block;
+    padding: 11px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .result-actions a.primary {
+    background: var(--ml-purple);
+    color: white;
+  }
+  .result-actions a.secondary {
+    background: white;
+    color: var(--ml-purple);
+    border: 1px solid var(--ml-purple);
+  }
+  .internal-note {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    background: #fff6ec;
+    border: 1px dashed var(--ml-orange);
+    color: var(--ml-ink);
+    font-size: 13px;
+    text-align: left;
+  }
+  .internal-note b { color: var(--ml-orange); }
   footer {
     text-align: center;
     margin-top: 40px;
@@ -412,6 +493,22 @@
       <button type="submit" id="submit-btn">Generate FireScout Audit</button>
       <div class="status" id="status"></div>
     </div>
+
+    <div class="result" id="result">
+      <h3>FireScout is live.</h3>
+      <div class="client-line" id="result-client"></div>
+      <img class="qr" id="result-qr" alt="QR code to the audit">
+      <div class="link-row">
+        <input type="text" id="result-link" readonly>
+        <button type="button" id="copy-btn">Copy</button>
+      </div>
+      <div class="result-actions">
+        <a class="primary" id="open-link" target="_blank" rel="noopener">Open audit</a>
+        <a class="secondary" id="pdf-link" target="_blank" rel="noopener">Download PDF</a>
+        <a class="secondary" id="qr-dl" download="firescout-qr.png">Save QR</a>
+      </div>
+      <div class="internal-note" id="internal-note" style="display:none"></div>
+    </div>
   </form>
 
   <footer>
@@ -430,37 +527,42 @@
     btn.textContent = 'Generating audit (60-90s)...';
     status.style.display = 'block';
     status.className = 'status';
-    status.textContent = 'Claude is scoring, writing, and rendering. Hang tight.';
+    status.textContent = 'Claude is scoring, writing, and publishing. Hang tight.';
+    document.getElementById('result').style.display = 'none';
 
     try {
       const fd = new FormData(form);
 
-      // Get the response: it includes both PDF download AND a JSON header for the internal note
       const res = await fetch('/firescout/generate', { method: 'POST', body: fd });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
+      const data = await res.json();
 
-      // Pull the internal sales note from a custom response header (server sets it)
-      const internalNote = res.headers.get('X-Internal-Sales-Note') || '';
+      // Fill the result panel
+      const qrSrc = 'data:image/png;base64,' + data.qr_png_base64;
+      document.getElementById('result-client').textContent =
+        data.client_name + ' · scan or share the link below';
+      document.getElementById('result-qr').src = qrSrc;
+      document.getElementById('qr-dl').href = qrSrc;
+      document.getElementById('result-link').value = data.url;
+      document.getElementById('open-link').href = data.url;
+      document.getElementById('pdf-link').href = data.pdf_url;
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const clientName = fd.get('client_name') || 'Audit';
-      a.href = url;
-      a.download = `${clientName.replace(/[^a-z0-9]/gi,'_')}_FireScout_Audit.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      let msg = 'Audit downloaded. Beautiful work.';
-      if (internalNote && internalNote.trim() && internalNote.trim() !== '-') {
-        msg += '\n\n📌 Internal note for sales: ' + decodeURIComponent(internalNote);
+      const noteEl = document.getElementById('internal-note');
+      if (data.internal_note && data.internal_note.trim()) {
+        noteEl.innerHTML = '<b>Internal note for sales (never client-visible):</b><br>';
+        noteEl.appendChild(document.createTextNode(data.internal_note));
+        noteEl.style.display = 'block';
+      } else {
+        noteEl.style.display = 'none';
       }
-      status.textContent = msg;
-      status.style.whiteSpace = 'pre-wrap';
-      status.style.textAlign = 'left';
+
+      status.style.display = 'none';
+      const result = document.getElementById('result');
+      result.style.display = 'block';
+      result.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
       btn.textContent = 'Generate another';
       btn.disabled = false;
@@ -469,6 +571,18 @@
       status.textContent = 'Something went wrong: ' + err.message;
       btn.textContent = 'Try again';
       btn.disabled = false;
+    }
+  });
+
+  document.getElementById('copy-btn').addEventListener('click', async () => {
+    const input = document.getElementById('result-link');
+    input.select();
+    try {
+      await navigator.clipboard.writeText(input.value);
+      document.getElementById('copy-btn').textContent = 'Copied!';
+      setTimeout(() => document.getElementById('copy-btn').textContent = 'Copy', 1600);
+    } catch (e) {
+      document.execCommand('copy');
     }
   });
 </script>

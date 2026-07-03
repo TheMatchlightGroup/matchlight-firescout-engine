@@ -10,19 +10,25 @@ Adds:
 """
 
 import os
+import io
+import re
 import json
+import base64
 import secrets
 import tempfile
 import urllib.parse
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import FastAPI, Form, HTTPException, Depends, status
-from fastapi.responses import FileResponse, HTMLResponse, Response
+import httpx
+import qrcode
+from fastapi import FastAPI, Form, HTTPException, Depends, Request, status
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from anthropic import Anthropic
 
 from firescout_renderer import render_audit
+from firescout_web import render_web_audit
 
 
 # =====================================================================
@@ -40,6 +46,82 @@ if not API_KEY:
 MASTER_PROMPT = PROMPT_PATH.read_text(encoding="utf-8")
 client = Anthropic(api_key=API_KEY)
 app = FastAPI(title="Matchlight FireScout Engine")
+
+# --- Supabase (audit storage for the web version) ---
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+AUDITS_TABLE = "firescout_audits"
+
+# Optional overrides:
+#   FIRESCOUT_PUBLIC_BASE — e.g. https://firescout.thematchlightgroup.com
+#                           (defaults to whatever host the request came in on)
+#   FIRESCOUT_CTA_URL     — where the audit's closing button points
+PUBLIC_BASE = os.environ.get("FIRESCOUT_PUBLIC_BASE", "").rstrip("/")
+CTA_URL     = os.environ.get("FIRESCOUT_CTA_URL", "https://www.thematchlightgroup.com")
+
+
+def _sb_headers():
+    return {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+    }
+
+
+def store_audit(slug: str, client_name: str, audit_json: dict,
+                html: str, internal_note: str):
+    """Insert one audit row into Supabase. Raises on failure."""
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        raise HTTPException(500,
+            "Supabase is not configured. Set SUPABASE_URL and "
+            "SUPABASE_SERVICE_KEY env vars (see README).")
+    r = httpx.post(
+        f"{SUPABASE_URL}/rest/v1/{AUDITS_TABLE}",
+        headers={**_sb_headers(), "Prefer": "return=minimal"},
+        json={
+            "slug": slug,
+            "client_name": client_name,
+            "audit_json": audit_json,
+            "html": html,
+            "internal_note": internal_note,
+        },
+        timeout=30,
+    )
+    if r.status_code not in (200, 201):
+        raise HTTPException(500, f"Supabase insert failed: {r.status_code} {r.text[:300]}")
+
+
+def fetch_audit(slug: str, columns: str) -> dict | None:
+    """Fetch one audit row (selected columns) by slug. Returns None if absent."""
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        return None
+    r = httpx.get(
+        f"{SUPABASE_URL}/rest/v1/{AUDITS_TABLE}",
+        headers=_sb_headers(),
+        params={"slug": f"eq.{slug}", "select": columns, "limit": 1},
+        timeout=30,
+    )
+    if r.status_code != 200:
+        return None
+    rows = r.json()
+    return rows[0] if rows else None
+
+
+def make_slug(client_name: str) -> str:
+    """Readable but unguessable: 'empower-and-flourish-k3x9f2'."""
+    base = re.sub(r"[^a-z0-9]+", "-", client_name.lower()).strip("-")[:40] or "audit"
+    return f"{base}-{secrets.token_hex(3)}"
+
+
+def make_qr_base64(url: str) -> str:
+    """QR code PNG for the audit link, base64-encoded for inline display."""
+    qr = qrcode.QRCode(box_size=10, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#1c1c1c", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 # =====================================================================
@@ -88,6 +170,7 @@ def serve_logo():
 
 @app.post("/firescout/generate")
 def generate(
+    request: Request,
     _: str = Depends(require_password),
     client_name: str           = Form(...),
     contact_names: str         = Form(...),
@@ -207,32 +290,77 @@ internal_sales_note if applicable.
         raise HTTPException(500,
             f"Expected 4 sections, got {len(audit_data['sections'])}")
 
-    # Extract internal note (NEVER passed to renderer — stays out of PDF)
+    # Extract internal note (NEVER passed to a renderer — never client-visible)
     internal_note = audit_data.pop("internal_sales_note", "") or ""
 
-    # 5. Render
-    safe_name = "".join(c for c in client_name if c.isalnum() or c in " -_").strip()
-    safe_name = safe_name.replace(" ", "_")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = Path(tempfile.gettempdir()) / f"{safe_name}_FireScout_{timestamp}.pdf"
+    # 5. Render the web version
+    try:
+        html = render_web_audit(audit_data, cta_url=CTA_URL)
+    except Exception as e:
+        raise HTTPException(500, f"Web render error: {e}")
+
+    # 6. Store in Supabase under an unguessable slug
+    slug = make_slug(client_name)
+    store_audit(slug, client_name, audit_data, html, internal_note)
+
+    # 7. Build the shareable link + QR
+    base = PUBLIC_BASE or str(request.base_url).rstrip("/")
+    audit_url = f"{base}/a/{slug}"
+
+    return JSONResponse({
+        "slug": slug,
+        "url": audit_url,
+        "pdf_url": f"{audit_url}.pdf",
+        "qr_png_base64": make_qr_base64(audit_url),
+        "internal_note": internal_note,
+        "client_name": client_name,
+    })
+
+
+# =====================================================================
+# PUBLIC AUDIT ROUTES — no auth; slugs are unguessable and unlisted
+# =====================================================================
+
+@app.get("/a/{slug}", response_class=HTMLResponse)
+def serve_audit(slug: str):
+    row = fetch_audit(slug, "html")
+    if not row:
+        raise HTTPException(404, "Audit not found")
+    return HTMLResponse(row["html"], headers={
+        "Cache-Control": "private, max-age=300",
+        "X-Robots-Tag": "noindex, nofollow",
+    })
+
+
+@app.get("/a/{slug}.pdf")
+def serve_audit_pdf(slug: str):
+    """Renders the print version on demand from the stored audit JSON."""
+    row = fetch_audit(slug, "client_name,audit_json")
+    if not row:
+        raise HTTPException(404, "Audit not found")
+
+    safe_name = "".join(c for c in row["client_name"] if c.isalnum() or c in " -_").strip()
+    safe_name = safe_name.replace(" ", "_") or "Audit"
+    out_path = Path(tempfile.gettempdir()) / f"{safe_name}_{slug}.pdf"
 
     try:
-        render_audit(audit_data, str(out_path), flatten=True)
+        render_audit(row["audit_json"], str(out_path), flatten=True)
     except Exception as e:
         raise HTTPException(500, f"Render error: {e}")
 
-    # Read PDF bytes so we can return it WITH a custom header
-    pdf_bytes = out_path.read_bytes()
+    return FileResponse(str(out_path), media_type="application/pdf",
+        filename=f"{safe_name}_FireScout_Audit.pdf")
 
-    # URL-encode the internal note so it survives an HTTP header
-    encoded_note = urllib.parse.quote(internal_note) if internal_note else ""
 
-    headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}_FireScout_Audit.pdf"',
-        "X-Internal-Sales-Note": encoded_note or "-",
-        "Access-Control-Expose-Headers": "X-Internal-Sales-Note",
-    }
-    return Response(content=pdf_bytes, media_type="application/pdf", headers=headers)
+@app.get("/a/{slug}/qr.png")
+def serve_audit_qr(slug: str, request: Request):
+    """The audit link as a QR PNG — handy for re-grabbing it later."""
+    row = fetch_audit(slug, "slug")
+    if not row:
+        raise HTTPException(404, "Audit not found")
+    base = PUBLIC_BASE or str(request.base_url).rstrip("/")
+    png = base64.b64decode(make_qr_base64(f"{base}/a/{slug}"))
+    return Response(content=png, media_type="image/png")
 
 
 # =====================================================================

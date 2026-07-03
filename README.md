@@ -2,7 +2,9 @@
 # FireScout Engine
 
 The Matchlight Group's internal audit generator. Sales fills out a form, Claude
-writes the audit, the rendering engine produces a flat, on-brand PDF.
+writes the audit, the engine publishes a scrolling, phone-first web audit at a
+shareable link (with QR code) — and can still render the flat, on-brand PDF on
+demand for anyone who wants paper.
 
 ## What's in this folder
 
@@ -10,12 +12,13 @@ writes the audit, the rendering engine produces a flat, on-brand PDF.
 |------|--------------|----------------|
 | `firescout.html` | The intake form your sales team uses | Designer/dev for tweaks |
 | `server.py` | FastAPI backend — orchestrates everything | Developer |
-| `firescout_renderer.py` | The locked PDF renderer (the design layer) | **Treat as read-only** |
+| `firescout_web.py` | The web renderer — Edition 01 branded scrolling HTML | Designer/dev |
+| `firescout_renderer.py` | The locked PDF renderer (the print layer) | **Treat as read-only** |
 | `firescout_prompt.md` | Claude's instructions — voice, rubric, schema | **Edit this to refine the audit's voice** |
 | `assets/Matchlight_isotype.svg` | Your isotype | Designer |
 | `requirements.txt` | Python dependencies | pip install |
 
-## How it works
+## How it works (v3 — web-first)
 
 ```
 Sales team
@@ -29,15 +32,54 @@ Sales team
                                        ▼
                               Structured audit JSON
                                        │
-                                       ▼
-                       [ firescout_renderer.render_audit() ]
-                                       │
-                                       ▼
-                            Flat, on-brand PDF
-                                       │
-                                       ▼
-                            Sales downloads it
+                          ┌────────────┴────────────┐
+                          ▼                         ▼
+        [ firescout_web.render_web_audit() ]   (stored JSON)
+                          │                         │
+                          ▼                         ▼
+                 HTML stored in Supabase     /a/{slug}.pdf renders
+                          │                  the print version
+                          ▼                  on demand
+              /a/{slug} — live audit link
+                          │
+                          ▼
+          Success screen: link + QR + internal note
+          (sit with the client, scan, scroll together)
 ```
+
+One Claude call produces both versions. The web audit is the deliverable; the
+PDF is the fallback for print.
+
+## Supabase setup (one-time, ~2 minutes)
+
+Audits are stored in a Supabase table so links survive restarts and redeploys.
+
+1. In your Supabase project, run this SQL (SQL Editor → New query):
+
+```sql
+create table if not exists firescout_audits (
+  slug          text primary key,
+  client_name   text not null,
+  audit_json    jsonb not null,
+  html          text not null,
+  internal_note text,
+  created_at    timestamptz not null default now()
+);
+
+-- Lock it down: the engine uses the service key, which bypasses RLS.
+-- No public policies means no public access except through the engine.
+alter table firescout_audits enable row level security;
+```
+
+2. Grab two values from Project Settings → API:
+   - **Project URL** → `SUPABASE_URL`
+   - **service_role key** → `SUPABASE_SERVICE_KEY` (keep this secret; it's
+     server-side only and never appears in any page)
+
+3. Set both as env vars on Render (see below).
+
+Audit links are unguessable (`client-name-a1b2c3`) and pages are served with
+`noindex` — private to whoever holds the link.
 
 ## Local setup (dev)
 
@@ -59,6 +101,11 @@ cp /path/to/Matchlight_isotype.svg assets/
 export ANTHROPIC_API_KEY="sk-ant-..."
 export FIRESCOUT_PASSWORD="something-only-the-team-knows"
 export MATCHLIGHT_LOGO_SVG="$(pwd)/assets/Matchlight_isotype.svg"
+export SUPABASE_URL="https://YOUR-PROJECT.supabase.co"
+export SUPABASE_SERVICE_KEY="eyJ..."          # service_role key
+# Optional:
+export FIRESCOUT_PUBLIC_BASE=""               # e.g. https://firescout.thematchlightgroup.com
+export FIRESCOUT_CTA_URL="https://www.thematchlightgroup.com"
 
 # 5. Run it:
 uvicorn server:app --reload --port 8000
