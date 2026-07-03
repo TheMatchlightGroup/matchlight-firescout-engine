@@ -369,4 +369,4 @@ def serve_audit_qr(slug: str, request: Request):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "firescout", "version": "2"}
+    return {"ok": True, "service": "firescout", "version": "3"}
