@@ -29,6 +29,7 @@ from anthropic import Anthropic
 
 from firescout_renderer import render_audit
 from firescout_web import render_web_audit
+from scrlaudit_web import render_scrlaudit_web, WALKTHROUGH_LABELS, band_for
 
 
 # =====================================================================
@@ -69,7 +70,7 @@ def _sb_headers():
 
 
 def store_audit(slug: str, client_name: str, audit_json: dict,
-                html: str, internal_note: str):
+                html: str, internal_note: str, kind: str = "firescout"):
     """Insert one audit row into Supabase. Raises on failure."""
     if not (SUPABASE_URL and SUPABASE_KEY):
         raise HTTPException(500,
@@ -84,6 +85,7 @@ def store_audit(slug: str, client_name: str, audit_json: dict,
             "audit_json": audit_json,
             "html": html,
             "internal_note": internal_note,
+            "kind": kind,
         },
         timeout=30,
     )
@@ -335,9 +337,13 @@ def serve_audit(slug: str):
 @app.get("/a/{slug}.pdf")
 def serve_audit_pdf(slug: str):
     """Renders the print version on demand from the stored audit JSON."""
-    row = fetch_audit(slug, "client_name,audit_json")
+    row = fetch_audit(slug, "client_name,audit_json,kind")
     if not row:
         raise HTTPException(404, "Audit not found")
+    if (row.get("kind") or "firescout") != "firescout":
+        raise HTTPException(404,
+            "PDF rendering isn't available for this audit type — "
+            "the web version is the deliverable.")
 
     safe_name = "".join(c for c in row["client_name"] if c.isalnum() or c in " -_").strip()
     safe_name = safe_name.replace(" ", "_") or "Audit"
@@ -367,6 +373,120 @@ def serve_audit_qr(slug: str, request: Request):
 # HEALTH CHECK
 # =====================================================================
 
+# =====================================================================
+# SCRLAUDIT STUDIO — Caleb's manual audit, same publish pipeline
+# =====================================================================
+
+SCRL_FORM_PATH = Path(__file__).parent / "scrlaudit.html"
+
+
+@app.get("/scrlaudit", response_class=HTMLResponse)
+def scrlaudit_form(_: str = Depends(require_password)):
+    return HTMLResponse(SCRL_FORM_PATH.read_text(encoding="utf-8"))
+
+
+@app.post("/scrlaudit/publish")
+async def scrlaudit_publish(request: Request, _: str = Depends(require_password)):
+    form = await request.form()
+
+    def num(name, default=0):
+        try:
+            return max(0, min(10, int(form.get(name, default))))
+        except (TypeError, ValueError):
+            return default
+
+    client_name = (form.get("client_name") or "").strip()
+    if not client_name:
+        raise HTTPException(400, "Client name is required")
+
+    walkthrough = [
+        {"label": WALKTHROUGH_LABELS[i],
+         "score": num(f"w{i+1}", 5),
+         "note": (form.get(f"n{i+1}") or "").strip()}
+        for i in range(10)
+    ]
+    total = sum(w["score"] for w in walkthrough)
+    _, band_rec = band_for(total)
+
+    # Present the date the way the audits speak: "June 30, 2026"
+    date_str = (form.get("audit_date") or "").strip()
+    if date_str:
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+            date_str = f"{dt.strftime('%B')} {dt.day}, {dt.year}"
+        except ValueError:
+            pass
+
+    data = {
+        "client_name": client_name,
+        "business_type": (form.get("business_type") or "").strip(),
+        "location": (form.get("location") or "").strip(),
+        "auditor_name": (form.get("auditor_name") or "").strip(),
+        "audit_date": date_str,
+        "pillar_clarity": num("pillar_clarity", 5),
+        "pillar_momentum": num("pillar_momentum", 5),
+        "pillar_effort": num("pillar_effort", 5),
+        "walkthrough": walkthrough,
+        "dive_clarity": (form.get("dive_clarity") or "").strip(),
+        "dive_momentum": (form.get("dive_momentum") or "").strip(),
+        "dive_effort": (form.get("dive_effort") or "").strip(),
+        "other_notes": (form.get("other_notes") or "").strip(),
+        "interpretation": (form.get("interpretation") or "").strip(),
+        "conclusion": (form.get("conclusion") or "").strip(),
+        "rec_headline": (form.get("rec_headline") or "").strip() or band_rec,
+        "rec_body": (form.get("rec_body") or "").strip(),
+        "closing_note": (form.get("closing_note") or "").strip(),
+    }
+
+    try:
+        html = render_scrlaudit_web(data, cta_url=CTA_URL)
+    except Exception as e:
+        raise HTTPException(500, f"Web render error: {e}")
+
+    slug = make_slug(client_name)
+    store_audit(slug, client_name, data, html, "", kind="scrlaudit")
+
+    base = PUBLIC_BASE or str(request.base_url).rstrip("/")
+    audit_url = f"{base}/a/{slug}"
+
+    return JSONResponse({
+        "slug": slug,
+        "url": audit_url,
+        "qr_png_base64": make_qr_base64(audit_url),
+        "client_name": client_name,
+        "score": total,
+    })
+
+
+@app.get("/", response_class=HTMLResponse)
+def studio_home():
+    """A small branded front door linking both tools."""
+    return HTMLResponse("""<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matchlight Audit Engine</title>
+<style>
+ body{margin:0;background:#1c1c1c;color:#F2EFF4;min-height:100vh;
+   display:flex;align-items:center;justify-content:center;
+   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+ .box{text-align:center;padding:40px 24px}
+ .dash{width:56px;height:5px;border-radius:3px;margin:0 auto 22px;
+   background:linear-gradient(90deg,#6B1F6A,#C0203A,#E41C23,#F05A28,#F5A623)}
+ h1{font-size:22px;font-weight:800;margin:0 0 6px}
+ p{color:#A79FB2;font-size:14px;margin:0 0 30px}
+ a{display:block;max-width:320px;margin:0 auto 14px;padding:16px 24px;
+   border-radius:10px;text-decoration:none;color:#fff;font-weight:700;
+   background:#6B1F6A;border-top:3px solid #F05A28}
+ a span{display:block;font-weight:400;font-size:12.5px;color:#D9CBE0;margin-top:3px}
+</style></head><body><div class="box">
+<div class="dash"></div>
+<h1>Matchlight Audit Engine</h1>
+<p>Internal tools · The Matchlight Group</p>
+<a href="/firescout">FireScout<span>Comprehensive storefront audit · Claude-written</span></a>
+<a href="/scrlaudit">SCRLaudit Studio<span>Focused mobile audit · auditor-written</span></a>
+</div></body></html>""")
+
+
 @app.get("/health")
 def health():
-    return {"ok": True, "service": "firescout", "version": "3"}
+    return {"ok": True, "service": "firescout", "version": "4"}

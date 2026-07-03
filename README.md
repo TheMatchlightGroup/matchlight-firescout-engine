@@ -1,10 +1,18 @@
 [README.md](https://github.com/user-attachments/files/27531268/README.md)
-# FireScout Engine
+# Matchlight Audit Engine (FireScout + SCRLaudit)
 
-The Matchlight Group's internal audit generator. Sales fills out a form, Claude
-writes the audit, the engine publishes a scrolling, phone-first web audit at a
-shareable link (with QR code) — and can still render the flat, on-brand PDF on
-demand for anyone who wants paper.
+The Matchlight Group's internal audit generator — one engine, two products:
+
+- **FireScout** (`/firescout`) — sales fills a brief, **Claude writes** the
+  comprehensive storefront audit, the engine publishes a scrolling web audit
+  with a shareable link + QR (PDF on demand for print).
+- **SCRLaudit Studio** (`/scrlaudit`) — **Caleb writes** the focused
+  mobile-first audit directly in a form; the engine publishes it through the
+  same pipeline: Edition 01 web audit, link + QR, same `/a/{slug}` links.
+
+Both audit types live in the same Supabase table (`kind` column tells them
+apart) and are served by the same routes. The root URL (`/`) is a small
+landing page linking both tools.
 
 ## What's in this folder
 
@@ -12,7 +20,9 @@ demand for anyone who wants paper.
 |------|--------------|----------------|
 | `firescout.html` | The intake form your sales team uses | Designer/dev for tweaks |
 | `server.py` | FastAPI backend — orchestrates everything | Developer |
-| `firescout_web.py` | The web renderer — Edition 01 branded scrolling HTML | Designer/dev |
+| `firescout_web.py` | FireScout web renderer — Edition 01 scrolling HTML | Designer/dev |
+| `scrlaudit_web.py` | SCRLaudit web renderer — same design system | Designer/dev |
+| `scrlaudit.html` | Caleb's SCRLaudit form (manual audits) | Designer/dev |
 | `firescout_renderer.py` | The locked PDF renderer (the print layer) | **Treat as read-only** |
 | `firescout_prompt.md` | Claude's instructions — voice, rubric, schema | **Edit this to refine the audit's voice** |
 | `assets/Matchlight_isotype.svg` | Your isotype | Designer |
@@ -63,7 +73,8 @@ create table if not exists firescout_audits (
   audit_json    jsonb not null,
   html          text not null,
   internal_note text,
-  created_at    timestamptz not null default now()
+  created_at    timestamptz not null default now(),
+  kind          text not null default 'firescout'
 );
 
 -- Lock it down: the engine uses the service key, which bypasses RLS.
